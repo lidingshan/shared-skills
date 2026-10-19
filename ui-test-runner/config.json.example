@@ -1,0 +1,8 @@
+{
+  "ticket_system": "jira",
+
+  "jira": {
+    "projedct_key": "<replace with the project key>",
+    "type": "Bug"
+  }
+}
