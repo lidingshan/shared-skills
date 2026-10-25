@@ -89,6 +89,15 @@ Keep the session open until the user explicitly says the whole task is completed
 
 ## Run tests
 
+### Sign in when required
+
+When running an agent test case, handle required sign-in before continuing with steps that depend on authentication:
+
+- If the application accepts a username and password, load `.env` from the target application project root and check for non-empty `UI_TEST_USERNAME` and `UI_TEST_PASSWORD` values. If both are configured, try signing in with them and verify the authenticated UI before continuing. Keep credential values out of messages, recordings, reports, and generated source code; use environment-variable references in generated tests.
+- If `.env` is missing, either credential is missing or empty, sign-in uses another method, or the configured credentials do not complete sign-in (including a required MFA step), ask the human to complete sign-in. Wait for their explicit confirmation that they have signed in, then verify the authenticated UI before resuming the case. Do not continue dependent steps while waiting.
+
+### Execution
+
 1. Choose one filesystem-safe timestamp for the run before executing tests. Reserve `reports/ui-test-report-<timestamp>.md` and create `outputs/ui-test-<timestamp>/` using exactly the same timestamp. If either path exists, choose a new timestamp for both; never overwrite an earlier run. Find every regular test case file recursively according to `Test case naming convention` under `agent-tests/` and sort the project-relative paths. Each file is one test. If there are no test files, write a report with zero totals and explain that no tests were found.
 2. Read each complete file. Identify its setup, actions, expected results, and any explicit skip condition. An empty file or one without actionable steps is a failure with its content problem recorded as the actual result.
 3. Use the available browser or desktop UI tools to perform the steps in order. For web cases, record each action, observed locator, input reference, expected result, and actual result as you go, following the reference. Observe the UI after state-changing actions. Do not infer success from an action call alone. Reestablish the required starting state between tests when needed.
