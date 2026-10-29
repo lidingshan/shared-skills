@@ -31,9 +31,17 @@ python3 -m venv .venv-ui
 # The shell must have this value before expanding the --base-url argument.
 .venv-ui/bin/python -m pytest tests \
   --base-url "${UI_TEST_BASE_URL:?Set UI_TEST_BASE_URL}" \
-  --browser chromium --tracing retain-on-failure --screenshot only-on-failure \
+  --browser chromium --tracing off --screenshot only-on-failure \
   --output outputs/ui-test-<timestamp>/playwright/replay-<invocation-id> \
   --junitxml outputs/ui-test-<timestamp>/junit-<invocation-id>.xml
+```
+
+Keep `--tracing off` in documented commands: a Playwright trace stores the values passed to `fill` and `type`, including passwords. When a trace is needed for debugging, start it inside the test only after sign-in and any other secret entry have finished, and save it under the run's output folder:
+
+```python
+context.tracing.start(screenshots=True, snapshots=True)  # after sign-in completes
+...
+context.tracing.stop(path=trace_path)
 ```
 
 Replace `<timestamp>` with the exact timestamp in `reports/ui-test-report-<timestamp>.md` and `<invocation-id>` with a unique replay identifier before publishing an exact command. Create the output folder first. Use a distinct Playwright child directory per replay because subsequent Playwright runs may clear their output directory. Later standalone regression runs choose a new timestamp and create a new `outputs/ui-test-<timestamp>/` folder. Save all run artifacts there, including logs, evidence, videos, downloads, exports, and JUnit XML; only the Markdown test report belongs in `reports/`. Python regression scripts and reusable suite support files remain in `tests/`. If `tests/` also contains unrelated tests, scope the UI regression command to the generated modules or subfolders rather than running unrelated suites. Also document a single-case command using the saved module/function node ID and the same base URL and artifact options. The regression run uses only Python and the browser; it must not call AI, browser-agent tools, or ticket systems. Pytest provides a nonzero exit for failing tests and JUnit results for CI. JUnit does not automatically produce the skill's Markdown report or bug tickets.
@@ -72,7 +80,6 @@ For a locator visibility step outside final expectation verification, use `is_vi
 
 ```python
 from time import monotonic
-
 
 def visibility_status(locator, *, hidden=False, timeout_ms=5000):
     deadline = monotonic() + timeout_ms / 1000
