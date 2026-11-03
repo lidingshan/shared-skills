@@ -1,13 +1,13 @@
 ---
 name: ui-test-runner
-description: Run Markdown-defined UI tests or record an interactive web task in the built-in browser, then generate Markdown cases and reusable Python Playwright regression tests. Use when asked to validate project UI cases, initialize UI testing, or record user and agent actions for later replay without AI. Manual action capture requires a supported browser recorder; otherwise use guided recording. Create bug tickets in the configured system for failed test runs.
+description: Run Markdown-defined UI tests or record an interactive web task in a browser, then generate Markdown cases and reusable Python Playwright regression tests. Use when asked to validate project UI cases, initialize UI testing, or record user and agent actions for later replay without AI. Manual action capture requires a supported browser recorder; otherwise use guided recording. Create bug tickets in the configured system for failed test runs.
 metadata:
   short-description: Run UI tests and save Python Playwright regression tests
 ---
 
 # UI test runner
 
-Resolve the target application root from the user's project context and repository instructions. For a project-local install at `.agents/skills/ui-test-runner/SKILL.md`, the root is three directories above this file. For a shared/global skill, use the target application checkout, not the skill repository. Resolve `agent-tests/` (Markdown cases), `tests/` (Python scripts), `reports/` (Markdown reports), and `outputs/` (run artifacts) from that root.
+Resolve the target application root from the user's project context and repository instructions. Use the target application checkout even when the skill is installed elsewhere. Ask for the root if the target checkout is ambiguous. Resolve `agent-tests/` (Markdown cases), `tests/` (Python scripts), `reports/` (Markdown reports), and `outputs/` (run artifacts) from that root.
 
 For web tests, running a case also means recording its steps and creating or updating a Python Playwright test in the target project. The saved test must run without an AI agent. Read [Python Playwright regression workflow](references/python-playwright.md) before setup or execution. Desktop-only cases still receive normal results; record unsupported Playwright automation in the separate recording.
 
@@ -34,20 +34,22 @@ ONLY List the test markdown files in `agent-tests` folder and python tests in `t
 To find the right test cases, refer to `Test case naming convention`
 DON'T look for cases from any other folders
 
+Exclude `agent-tests/before-all.md` and `agent-tests/after-all.md` from both the interactive checklist and the text fallback. Suite hooks have no case IDs and are omitted from folder selections, counts, and the `Run all test cases` selection payload.
+
 ### Test case naming convention
 - The naming convention of test case markdown file in `agent-tests/` folder is `^[T|t][E|e][S|s][T|t](.)*\.md$`
 - The naming convention of script test case in `tests/` folder is `^[T|t][E|e][S|s][T|t]_(.)*\.py$`
 
 ### Show the list of found test cases
 
-Present a working multiple-selection checklist, not just Markdown `[ ]` text or separate follow-up links. When the available `visualize` skill supports inline interactive controls and follow-up messages, read it and create the checklist using that workflow. Do not use a single-choice question tool as a substitute for multiple selection.
+Present a working multiple-selection checklist, not just Markdown `[ ]` text or separate follow-up links. Use the host's documented interactive controls when they support multiple selection and can submit the selected paths back to the agent. Do not use a single-choice question tool as a substitute for multiple selection.
 
 - Keep Markdown cases (`agent-tests/`) and Python cases (`tests/`) in two separately labeled lists within the same selector. Show an explicit empty state when a list has no matches.
 - Give every case an initially unchecked native checkbox, its filename, and a concise scenario summary derived from its contents. Use the project-relative path as its stable identifier so duplicate filenames remain distinguishable. Sort paths within each list.
 - List root-level cases directly. Nest subfolder cases under selectable folder groups, preserving the relative folder hierarchy in both lists.
 - Selecting a group selects every descendant case; clearing it clears every descendant case. Reflect partial selection with an indeterminate group checkbox. Deduplicate selected paths when groups overlap.
 - Add `Run all test cases` and `Run selected test cases` buttons after the lists. Disable the selected-run button when nothing is selected and the all-run button when no cases exist.
-- Submit a follow-up message only when the user clicks a run button. With the inline visualization host, use `window.openai.sendFollowUpMessage({ prompt, title })`. Include the target application root and exact project-relative case paths, separated into Markdown and Python cases, in the prompt. The all-run button submits every listed path; the selected-run button submits only checked case paths after expanding groups. Do not rely on widget state alone to communicate the selection.
+- Submit a follow-up message only when the user clicks a run button. Include the target application root and exact project-relative case paths, separated into Markdown and Python cases, in the prompt. The all-run button submits every listed path; the selected-run button submits only checked case paths after expanding groups. Do not rely on widget state alone to communicate the selection.
 - Listing cases does not run them. Wait for the submitted run request, then execute only its selected cases. Selecting a folder means running all cases under that folder. Run selected Python scripts as regression tests rather than treating them as Markdown source definitions.
 
 If an interactive checklist or follow-up submission is unavailable, say so briefly and provide two numbered, grouped lists with stable case IDs. Ask the user to reply with multiple IDs, folder names, or `all`. Treat this as a text-selection fallback; do not claim static Markdown checkboxes can submit selections.
@@ -59,7 +61,7 @@ Whenever creating an agent-test Markdown file in `agent-tests/`, read and use [a
 
 ## Record an interactive task
 
-When asked to record a new task, read [Interactive recording workflow](references/recording.md) and the Python Playwright reference. Open the target web app in a visible built-in browser and maintain one durable session across user actions and requested agent actions. Check whether the browser actually exposes manual action capture; snapshots and agent tool calls alone do not record the user's clicks or typing. Disclose unsupported capture and offer guided recording rather than claiming automatic recording.
+When asked to record a new task, read [Interactive recording workflow](references/recording.md) and the Python Playwright reference. Open the target web app in a visible browser that the user and agent can both access and maintain one durable session across user actions and requested agent actions. Check whether the browser actually exposes manual action capture; snapshots and agent tool calls alone do not record the user's clicks or typing. Disclose unsupported capture and offer guided recording rather than claiming automatic recording.
 
 Preserve the user's requested input and selection rules in both Markdown steps and Python scripts. Hardcode test data values only when the user explicitly supplies them; values merely observed on the page must not become fixed inputs, option locators, or expected results. For example, record “select the first available option” and implement that rule at replay time, even if the selected option during recording was “black”. See the recording reference for intent capture and the Python reference for replay rules.
 
@@ -99,15 +101,16 @@ When running an agent test case, handle required sign-in before continuing with 
 ### Execution
 
 1. Choose one filesystem-safe timestamp for the run before executing tests. Reserve `reports/ui-test-report-<timestamp>.md` and create `outputs/ui-test-<timestamp>/` using exactly the same timestamp. If either path exists, choose a new timestamp for both; never overwrite an earlier run. Find every regular test case file recursively according to `Test case naming convention` under `agent-tests/` and sort the project-relative paths. Each file is one test. If there are no test files, write a report with zero totals and explain that no tests were found.
-2. Read each complete file. Identify its setup, actions, expected results, and any explicit skip condition. An empty file or one without actionable steps is a failure with its content problem recorded as the actual result.
-3. Use the available browser or desktop UI tools to perform the steps in order. For web cases, record each action, observed locator, input reference, expected result, and actual result as you go, following the reference. Observe the UI after state-changing actions. Do not infer success from an action call alone. Reestablish the required starting state between tests when needed.
-4. Mark a test `passed` only if every stated expectation is observed. Mark it `failed` for an expectation mismatch, unexpected UI state, or execution error. 
-5. In the Markdown report, include expected and actual results for failed tests. The separate step recording retains observations and expectations for every web case.
+2. Honor the user's case selection. For a run with at least one selected Markdown case, locate and read the optional root-level `agent-tests/before-all.md` and `agent-tests/after-all.md` before starting. Execute `before-all.md` once, before any selected Markdown case runs. If setup fails or is blocked, record the reason and mark all selected Markdown cases skipped. Then proceed to suite teardown.
+3. Read each selected case in full. Identify its setup, actions, expected results, and any explicit skip condition. An empty file or one without actionable steps is a failure with its content problem recorded as the actual result.
+4. Use the host's available browser or desktop UI tools to perform the steps in order. For web cases, if no browser tool is available, use Python Playwright directly when the environment permits browser automation. If neither is available, apply the skip rule below. For web cases, record each action, observed locator, input reference, expected result, and actual result as you go, following the reference. Observe the UI after state-changing actions. Do not infer success from an action call alone. Reestablish the required starting state between tests when needed.
+5. Mark a test `passed` only if every stated expectation is observed. Mark it `failed` for an expectation mismatch, unexpected UI state, or execution error. Include expected and actual results for failed tests in the Markdown report. The separate step recording retains observations and expectations for every web case.
 6. Mark it `skipped` when an explicit skip condition applies or a required app, URL, account, fixture, or permission is unavailable; record the reason. Never count an unrun test as passed.
-7. Generate or update each web case's Python test from the recorded steps and original expectations. Retain assertions for application failures; do not change the expected result to make a broken application pass. Save a partial recording and an explicitly skipped Python case when a complete runnable test cannot be produced.
-8. Replay generated tests from a fresh context and reset fixture state when authorized and repeatable. Track replay results separately from the initial UI observations. If replay is blocked or unsafe to repeat within the requested scope, label the script unverified and explain why in the separate recording. Do not claim a script is reusable based only on syntax or collection checks.
-9. If a test is failed, raise a bug ticket as introduced in `Create a bug ticket`. Do not create a duplicate ticket for the same failure during replay.
-10. Close browser contexts or sessions created for the test run when all tests are completed.
+7. After every selected Markdown case has a pass, fail, or skip result, execute `after-all.md` once if present, including after failed or blocked setup. Run it before closing the Markdown run's browser or starting Python replay. Record action errors and blocked cleanup without adding cleanup verification. Record both hooks' steps under the run's `steps/` directory and report their outcomes separately from case totals.
+8. Generate or update each web case's Python test and translate any suite hook files into shared pytest hooks using [Generate suite hooks](references/python-playwright.md#generate-suite-hooks). Retain assertions for application failures; do not change the expected result to make a broken application pass. Save a partial recording and an explicitly skipped Python case when a complete runnable test cannot be produced.
+9. Replay generated tests from a fresh context and reset fixture state when authorized and repeatable. Track replay results separately from the initial UI observations. If replay is blocked or unsafe to repeat within the requested scope, label the script unverified and explain why in the separate recording. Do not claim a script is reusable based only on syntax or collection checks.
+10. If a test is failed, raise a bug ticket as introduced in `Create a bug ticket`. Do not create a duplicate ticket for the same failure during replay.
+11. Close browser contexts or sessions created for the test run when all tests are completed.
 
 Do not edit the source Markdown test definitions while running them. UI actions must stay within the user's requested test scope and existing authorization.
 
@@ -142,7 +145,7 @@ The report format is:
 |---|---|
 | 🟢 **Pass** | <total number of passed tests> |
 | 🔴 **Failed** | <total number of failed tests> |
-| 🟡 **Skipper** | <total number of skipped tests> |
+| 🟡 **Skipped** | <total number of skipped tests> |
 | Outputs | [ui-test-<timestamp>](../outputs/ui-test-<timestamp>/) |
 
 ## Results

@@ -6,10 +6,10 @@ Use this mode to teach a task through a combination of user operations and actio
 
 Inspect the available browser API documentation and advertised capabilities. There are two distinct capture modes:
 
-- **Automatic recording:** Use only a documented recorder that captures user interactions in the selected built-in browser. Start it before the first task action; establish how to drain, persist, and stop its event stream, and whether it covers navigations, frames, and new tabs. Do not invent recorder methods or assume tool-call logs contain manual actions.
+- **Automatic recording:** Use only a documented recorder that captures user interactions in the selected browser. Start it before the first task action; establish how to drain, persist, and stop its event stream, and whether it covers navigations, frames, and new tabs. Do not invent recorder methods or assume tool-call logs contain manual actions.
 - **Guided recording:** If no manual recorder exists, explain that agent actions can be logged, but user actions need narration or step-by-step checkpoints and observable browser evidence. Ask whether the user wants this mode and wait for their choice before treating manual operations as captured. Opening the requested app and preparing the session can proceed while awaiting that choice. If the user requires unattended capture of manual operations, report the missing recorder integration; do not silently substitute another browser.
 
-The inspected in-app browser API exposes snapshots, screenshots, agent-driven Playwright actions, and read-only `evaluate`, but no documented manual event recorder. Check capabilities again in the actual session in case this changes. Do not inject event listeners through read-only evaluation, attach an undocumented debugging connection, or treat screenshots, video, or navigation history as a complete action log. Playwright codegen in its own browser does not automatically capture an existing built-in browser session.
+Use only documented browser capabilities. Snapshots, video, and navigation history cannot establish a complete sequence of user actions. Playwright codegen records actions in the browser it launches. Use it only if the user agrees to use that browser and its capture can be combined with agent actions in the same session.
 
 ## Start and preserve a session
 
@@ -17,7 +17,9 @@ Resolve the target application root, URL, and task name from the request. Ask fo
 
 Choose a unique filesystem-safe timestamp and create `outputs/ui-test-<timestamp>/steps/recording-<task>.json`. Reserve collision-free names for the future Markdown and Python files without writing final cases yet. Do not overwrite an existing case unless the user requested an update. Save the session journal immediately and after each meaningful action or batch of recorder events.
 
-Open the URL with the available built-in browser API and make the tab visible. With `cua_repl`, use `cua.createBrowserTab("iab", url, { visible: true })`, or bind the user-specified existing tab. Read the returned browser documentation. Start supported capture before task operations, and record the initial route and prerequisites. Preserve the tab using its documented `markHandoff()` method before yielding so it survives into the next turn; repeat the mark on each turn that leaves the session open. Do not reload or navigate an existing in-progress tab solely to resume recording.
+Use the browser specified by the user. Otherwise choose a visible browser the user and agent can both access, using a host browser tool or, when supported, a headed Playwright session. Check that the agent can reconnect to the same session across turns. If no shared persistent browser is available, explain the missing capability before starting an interactive recording.
+
+Open the URL or bind the user-specified existing tab. Start supported capture before task operations and record the initial route and prerequisites. Use the browser's documented handoff or session retention mechanism before yielding. Do not reload or navigate an existing in-progress tab solely to resume recording.
 
 The durable journal should include:
 

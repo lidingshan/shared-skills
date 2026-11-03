@@ -100,6 +100,16 @@ Use `if visibility_status(locator): ...` or `if visibility_status(locator, hidde
 
 When authoring new fixture/helper logic, follow the target project's TDD instructions. For the regression case itself, define assertions from the original requirements before actions, run to demonstrate meaningful failure when feasible (for example with missing setup), then implement the observed steps and verify. Do not modify application code as part of a test-running request unless authorized.
 
+## Generate suite hooks
+
+Translate the recorded steps from `agent-tests/before-all.md` and `agent-tests/after-all.md` into shared Python setup and teardown helpers. Reference each source path in its helper. Wire them into the target project's pytest configuration, normally in `tests/conftest.py`, and merge with existing hooks. Generate only the helpers for files that exist. Keep them out of test collection.
+
+- Scope the lifecycle to invocations with selected generated UI cases from this suite, including single-case runs. Identify them by a registered marker or another explicit mapping. Run setup once before the first matching case and teardown once after the last, even when every matching case is statically skipped. Use a pytest run-level wrapper such as `pytest_runtestloop` with a `finally` block. A fixture alone can be bypassed by static skips. Skip the hooks for runs without matching cases. Document a serial replay command and reject parallel worker execution for the hooked suite unless it already supports a single coordinated lifecycle.
+- Make setup failures visible and skip the affected case bodies with the setup reason. Attempt teardown even after partial setup, and surface teardown action errors without masking earlier failures. Keep hooks independent of individual test outcomes and of any per-case browser or authentication state. For UI actions, use dedicated fresh browser contexts and close them reliably. Never add assertions or follow-up checks to verify cleanup.
+- If a present hook cannot be translated reliably, document the gap and block affected automated replay explicitly instead of silently omitting the hook. Update the suite README with the lifecycle, prerequisites, and replay commands.
+
+Verify hook order and once-per-run behavior with multiple selected cases, a single case, an all-skipped selection, a case failure, and a setup failure. Also verify an unrelated-only selection leaves both hooks idle.
+
 ## Verify and hand off
 
 Check imports and collect the generated suite, then run it against the target application from a clean context with repeatable fixture state. Replay only actions within the existing authorization; do not repeat irreversible submissions just to validate generated code. Record blocked verification explicitly.
