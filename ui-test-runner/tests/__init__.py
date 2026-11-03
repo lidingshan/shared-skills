@@ -1,7 +1,0 @@
-"""Load local environment settings for the test suite."""
-
-from pathlib import Path
-
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).resolve().parent.parent / ".env", override=False)

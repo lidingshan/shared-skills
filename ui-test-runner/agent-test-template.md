@@ -1,17 +1,13 @@
-## Test Case 
-The name of the test case
-
 ## Steps
-Describe each test step of the testing in order. For example,
-1. Login <url>
-2. Input <user name> and <password>
-3. Select Login
+
+Note the starting route and any prerequisites, then list the actions in order, including any rules for choosing inputs at runtime. Refer to environment variables or fixtures for sensitive inputs.
 
 ## Expect
-Describe the expected result for a passed test. For example, the page title should be <the expected page title>
-ONLY capture the expectation that is requested explicitly. Need not capture the verification for each step.
+
+Describe the explicitly requested outcomes that determine whether the case passes.
 
 ## Cleanup
-Describe the steps to clean the test envrionment if applicabel. For example, remove the created test item, etc.
 
-DON'T capture any other details in this file. E.g. the status of recording, replaying, etc. Keep the file clean and clear as test description.
+Describe the actions needed to reset the test environment, or state that no cleanup is needed.
+
+Add a regression test link or coverage notes when useful. Keep run results and recording or replay status in the corresponding run artifacts.

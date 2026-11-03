@@ -1,8 +1,9 @@
 {
   "ticket_system": "jira",
-
   "jira": {
+    "site": "<your-site>.atlassian.net",
     "project_key": "<replace with the project key>",
     "type": "Bug"
-  }
+  },
+  "allowed_hosts": []
 }

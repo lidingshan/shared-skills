@@ -9,12 +9,12 @@ Read Markdown source cases only from `agent-tests/`. Save generated Python tests
 When no Python UI suite exists, create in the target application:
 
 - `tests/test_*.py`: collected regression tests.
-- `tests/conftest.py`: shared setup and cleanup, only when needed.
+- `tests/conftest.py`: project environment and base URL fixtures, plus shared suite hooks when needed.
 - `tests/requirements.txt`: required packages and versions validated in that project, unless its dependency manager already records them.
 - `tests/README.md`: application startup, installation, required environment variables, test data/reset procedure, full-suite and single-case commands, and artifact locations. Include limitations and any manual prerequisites.
 - `outputs/ui-test-<timestamp>/steps/`: per-case recordings from the current run.
 
-Add every required environment variable to the target application root `.env`, preserving existing entries. Use empty values with setup comments for unknown values. Load `.env` without overriding existing environment variables (for example, with `python-dotenv` in `tests/conftest.py`, recording the dependency). Keep `.env` ignored by version control and document how to supply missing values. Ensure the documented command loads `.env` before expanding shell variables such as `UI_TEST_BASE_URL`; alternatively let a fixture read the loaded value.
+Add every required environment variable to the target application root `.env`, preserving existing entries. Use empty values with setup comments for unknown values. Use the bundled [conftest.py](../tests/conftest.py) to load the root `.env` without overriding exported variables. The fixture preserves pytest’s configured base URL and falls back to `UI_TEST_BASE_URL`. Keep `.env` ignored by version control and document required values. Merge with any existing fixture or dotenv loader so the suite loads the file once. If a generated case needs a base URL and none is configured, report the missing prerequisite explicitly.
 
 Keep Python setup and run instructions in `tests/README.md`. Markdown case discovery scans only `agent-tests/`; it does not scan `tests/`. Map each source case to a stable Python module/function, using its project-relative path to avoid collisions between similarly named cases. Include the source path in a docstring or comment. Reuse that mapping on subsequent runs and review edits rather than appending duplicate tests or replacing maintained suites. Persist the mapping in the recordings and run instructions.
 
@@ -27,10 +27,8 @@ python3 -m venv .venv-ui
 .venv-ui/bin/python -m pip install -r tests/requirements.txt
 .venv-ui/bin/python -m playwright install chromium
 # Start the application using its documented project command first.
-# Add UI_TEST_BASE_URL to the root .env and export it before this command.
-# The shell must have this value before expanding the --base-url argument.
+# Add UI_TEST_BASE_URL to the root .env.
 .venv-ui/bin/python -m pytest tests \
-  --base-url "${UI_TEST_BASE_URL:?Set UI_TEST_BASE_URL}" \
   --browser chromium --tracing off --screenshot only-on-failure \
   --output outputs/ui-test-<timestamp>/playwright/replay-<invocation-id> \
   --junitxml outputs/ui-test-<timestamp>/junit-<invocation-id>.xml
@@ -70,11 +68,11 @@ def test_case_name(browser, base_url):
         page = context.new_page()
         # Recorded setup, actions, and final expected-result assertions.
     finally:
-        # Perform any case-specific cleanup without verifying its results.
+        # Perform any case-specific teardown, then close the context.
         context.close()
 ```
 
-Keep the `browser, base_url` parameters for every generated case, including skipped placeholders. Each final expectation needs a corresponding assertion; clicks alone do not establish success. Intermediate locator visibility checks and cleanup results are excluded from these assertions.
+Keep the `browser, base_url` parameters for every generated case, including skipped placeholders. Each final expectation needs a corresponding assertion; clicks alone do not establish success. Use the visibility and teardown rules below for other steps.
 
 For a locator visibility step outside final expectation verification, use `is_visible` or `is_hidden` with a five-second timeout budget and use the returned Boolean for control flow. Do not wrap it in `expect`, `assert`, or another validation that fails the test. Playwright ignores the `timeout` parameter on these methods, so use bounded polling rather than assuming `is_visible(timeout=5000)` waits:
 
@@ -97,7 +95,7 @@ Use `if visibility_status(locator): ...` or `if visibility_status(locator, hidde
 
 - Prefer observed role/name, label, or stable test-ID locators. Scope ambiguous targets; use frame locators and popup pages where observed. Avoid coordinates, generated CSS classes, positional selectors, and XPath unless evidence shows a stable alternative is unavailable. Positional selection is appropriate when it expresses the user's explicit rule, such as the first available option in a scoped list.
 - Preserve requested input and selection rules instead of freezing values observed during recording. Use literal test data only when the user explicitly supplied it; stable control labels and test IDs may still identify controls. Resolve derived values from the current UI, configuration, or fixtures according to the recorded rule at replay time. For “select the first available option”, locate the scoped list, wait for eligible options, exclude disabled options and placeholders as required, and select the first eligible option. Do not hardcode “black” in an option locator, input, fixture default, or assertion merely because it was selected during recording. Capture the runtime-selected value when needed and assert that subsequent UI reflects it. If no eligible option exists, fail with a clear assertion; do not silently substitute another rule. Unclear selection intent is a generation blocker, not permission to guess.
-- Use Playwright action waiting and retrying `expect` assertions for final expected outcomes. For intermediate visibility steps, use the five-second Boolean polling rule above without assertions. Avoid other fixed sleeps. Use event expectations around downloads, popups, or dialogs when relevant.
+- Use Playwright action waiting and retrying `expect` assertions for final expected outcomes. Avoid other fixed sleeps. Use event expectations around downloads, popups, or dialogs when relevant.
 - Use configurable base URLs and routes; keep credentials out of source. Make missing required configuration an explicit error or documented skip. Never let missing setup silently pass.
 - Give each test independent setup and cleanup. Always create a new context with `browser.new_context()` and close it in `finally`; do not use saved `storage_state`, persistent profiles, or previously authenticated contexts. Authenticate through recorded setup in that new context when needed. A fresh browser context isolates session state but does not reset server data. Use approved fixtures/reset helpers, unique test data, and cleanup to make repeat runs possible. Do not depend on the preceding case or an already logged-in AI browser session.
 - Generate cleanup actions in teardown (such as a fixture finalizer or `finally` block) so they execute even when a test assertion fails. Execute the cleanup without verifying its result: do not add `assert`, `expect`, response-status checks, polling, or follow-up UI/API queries to confirm deletion or reset. Playwright's normal action waiting and interactions needed to perform cleanup, such as confirming a delete dialog, are still appropriate.
@@ -112,7 +110,7 @@ When authoring new fixture/helper logic, follow the target project's TDD instruc
 Translate the recorded steps from `agent-tests/before-all.md` and `agent-tests/after-all.md` into shared Python setup and teardown helpers. Reference each source path in its helper. Wire them into the target project's pytest configuration, normally in `tests/conftest.py`, and merge with existing hooks. Generate only the helpers for files that exist. Keep them out of test collection.
 
 - Scope the lifecycle to invocations with selected generated UI cases from this suite, including single-case runs. Identify them by a registered marker or another explicit mapping. Run setup once before the first matching case and teardown once after the last, even when every matching case is statically skipped. Use a pytest run-level wrapper such as `pytest_runtestloop` with a `finally` block. A fixture alone can be bypassed by static skips. Skip the hooks for runs without matching cases. Document a serial replay command and reject parallel worker execution for the hooked suite unless it already supports a single coordinated lifecycle.
-- Make setup failures visible and skip the affected case bodies with the setup reason. Attempt teardown even after partial setup, and surface teardown action errors without masking earlier failures. Keep hooks independent of individual test outcomes and of any per-case browser or authentication state. For UI actions, use dedicated fresh browser contexts and close them reliably. Never add assertions or follow-up checks to verify cleanup.
+- Make setup failures visible and skip the affected case bodies with the setup reason. Attempt teardown even after partial setup, and surface teardown action errors without masking earlier failures. Keep hooks independent of individual test outcomes and of any per-case browser or authentication state. For UI actions, use dedicated fresh browser contexts and close them reliably. Apply the same teardown rules as for individual cases.
 - If a present hook cannot be translated reliably, document the gap and block affected automated replay explicitly instead of silently omitting the hook. Update the suite README with the lifecycle, prerequisites, and replay commands.
 
 Verify hook order and once-per-run behavior with multiple selected cases, a single case, an all-skipped selection, a case failure, and a setup failure. Also verify an unrelated-only selection leaves both hooks idle.
@@ -123,8 +121,8 @@ Check imports and collect the generated suite, then run it against the target ap
 
 Fix generation errors such as incorrect locators, missing setup, or invalid Python without weakening original expectations. Preserve application failures. If the initial UI run and replay disagree, investigate the discrepancy and record both outcomes in the separate recording; a changed UI or fixture state can explain it. Keep investigation within the requested scope and stop when further execution needs missing access, fixtures, or authorization.
 
-A `verified` script has passed an actual replay with all expectations asserted. A script that reproduces the intended application failure is labeled `reproduces failure`, with its failing assertion recorded. Syntax checks, collection, missing prerequisites, and unresolved replay errors mean `unverified`. A skipped placeholder provides no regression coverage. Keep these statuses and generation/replay details in the separate recording and suite README. The Markdown test report retains the initial UI case results and includes only `regression test case: [script filename](script test file path)` as additional information in `Details`; it does not include generation or replay results.
+A `verified` script has passed an actual replay with all expectations asserted. A script that reproduces the intended application failure is labeled `reproduces failure`, with its failing assertion recorded. Syntax checks, collection, missing prerequisites, and unresolved replay errors mean `unverified`. A skipped placeholder provides no regression coverage. Keep these statuses and generation/replay details in the separate recording and suite README. For Markdown cases, the test report retains the initial UI results and includes only `regression test case: [script filename](script test file path)` as additional information in `Details`; it does not include generation or replay results.
 
-Before finishing, confirm every discovered web case has a recording and either a mapped Python case or an explicit unsupported reason; scripts match the current source definitions; no secrets are committed; and the README contains the exact commands and prerequisites needed to rerun without AI. Do not claim a real application replay occurred if only this skill package was edited.
+Before finishing, confirm every selected Markdown web case has a recording and either a mapped Python case or an explicit unsupported reason; scripts match the current source definitions; no secrets are committed; and the README contains the exact commands and prerequisites needed to rerun without AI. Do not claim a real application replay occurred if only this skill package was edited.
 
 Official references for environment-specific options: [installation](https://playwright.dev/python/docs/intro), [pytest fixtures and CLI](https://playwright.dev/python/docs/test-runners), [locators](https://playwright.dev/python/docs/locators), and [assertions](https://playwright.dev/python/docs/test-assertions).

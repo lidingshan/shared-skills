@@ -1,6 +1,6 @@
 ---
 name: ui-test-runner
-description: Run Markdown-defined UI tests or record an interactive web task in a browser, then generate Markdown cases and reusable Python Playwright regression tests. Use when asked to validate project UI cases, initialize UI testing, or record user and agent actions for later replay without AI. Manual action capture requires a supported browser recorder; otherwise use guided recording. Create bug tickets in the configured system for failed test runs.
+description: Run Markdown UI cases and Python Playwright e2e, regression, or smoke tests. Initialize UI testing or record browser workflows as reusable Markdown cases and Python tests. Use guided recording when manual capture is unavailable. Draft Jira bugs for failed cases.
 metadata:
   short-description: Run UI tests and save Python Playwright regression tests
 ---
@@ -30,15 +30,7 @@ When a test requires an environment variable, add it to `.env` in the target app
 
 ## List test cases
 
-ONLY List the test markdown files in `agent-tests` folder and python tests in `tests` folder in two different lists. So the user can select a specific test case to run.
-To find the right test cases, refer to `Test case naming convention`
-DON'T look for cases from any other folders
-
-Exclude `agent-tests/before-all.md` and `agent-tests/after-all.md` from both the interactive checklist and the text fallback. Suite hooks have no case IDs and are omitted from folder selections, counts, and the `Run all test cases` selection payload.
-
-### Test case naming convention
-- The naming convention of test case markdown file in `agent-tests/` folder is `^[T|t][E|e][S|s][T|t](.)*\.md$`
-- The naming convention of script test case in `tests/` folder is `^[T|t][E|e][S|s][T|t]_(.)*\.py$`
+Discover regular files recursively in `agent-tests/` matching `^[Tt][Ee][Ss][Tt].*\.md$` and in `tests/` matching `^test_.*\.py$`. Exclude suite hooks from case selection. Show sorted Markdown and Python lists with project-relative paths and concise scenario summaries.
 
 ### Show the list of found test cases
 
@@ -56,7 +48,7 @@ If an interactive checklist or follow-up submission is unavailable, say so brief
 
 ## Generate Markdown test cases
 
-Whenever creating an agent-test Markdown file in `agent-tests/`, read and use [agent-test-template.md](agent-test-template.md) as the starting template. Preserve its `Objective`, `Steps`, `Expect`, and `Cleanup` sections and replace the example guidance with case-specific content. Include the goal, starting route, and prerequisites/test data in `Objective`; ordered actions in `Steps`; success criteria in `Expect`; and environment reset or teardown in `Cleanup`. If no cleanup is needed, state that explicitly. Use environment-variable or fixture references for sensitive inputs. Add supporting links or coverage notes as needed without replacing the template structure.
+Whenever creating an agent-test Markdown file in `agent-tests/`, read and use [agent-test-template.md](agent-test-template.md) as the starting template. Preserve its `Steps`, `Expect`, and `Cleanup` sections and replace the example guidance with case-specific content. Include the starting route, prerequisites, test data, and ordered actions in `Steps`; success criteria in `Expect`; and environment reset or teardown in `Cleanup`. If no cleanup is needed, state that explicitly. Use environment-variable or fixture references for sensitive inputs. Add supporting links or coverage notes as needed without replacing the template structure.
 
 ## Record an interactive task
 
@@ -69,13 +61,13 @@ Keep the session open until the user explicitly says the whole task is completed
 ## Initialize project
 - Check if the required folder `agent-tests/` is existing in project root, if not, create it and then create a `README.md` with content of:
   ```markdown
-  This folder contains Markdown UI test cases for the agent. Test filenames must start with "test" or "Test" and end with ".md". Cases can be in subfolders. Python regression scripts belong in tests/.
+  This folder contains Markdown UI test cases for the agent. Test filenames must start with "test" (case insensitive) and end with ".md". Cases can be in subfolders. Python regression scripts belong in tests/.
   ```
 - Always ensure `tests/` exists in the project root during initialization, creating it if missing. This folder contains Python test scripts, including generated Playwright regression tests. Preserve existing files. If `tests/README.md` is missing, create it with:
   ```markdown
   This folder contains Python test scripts. Test filenames must start with "test_" and end with ".py". Tests can be in subfolders. Markdown UI test cases belong in agent-tests/.
   ```
-- Copy [tests/__init__.py](tests/__init__.py) from this skill's directory to `<project-root>/tests/__init__.py`. Preserve an existing project file, merging the required initialization code when needed rather than overwriting it.
+- Copy [tests/conftest.py](tests/conftest.py) into the target suite, merging with existing fixtures and environment loading. If a previous starter loads the same root `.env` in `tests/__init__.py`, migrate that loading to `conftest.py` and preserve unrelated initialization.
 - Copy [tests/requirements.txt](tests/requirements.txt) from this skill's directory to `<project-root>/tests/requirements.txt`. If the project file already exists, merge missing dependencies while preserving compatible existing version constraints. Resolve source paths relative to this `SKILL.md`, and destination paths relative to the target application root.
 - Create `.env` in the target project root if missing; preserve all existing entries. Add required environment variable names, using empty values and setup comments for unknown values. Keep `.env` out of version control and load it without overriding existing environment variables.
 - Install the dependencies defined in the project's `tests/requirements.txt` during initialization. Use the project's managed Python environment, or create a dedicated `.venv-ui` with `python3 -m venv .venv-ui`. From the project root, run `<environment-python> -m pip install -r tests/requirements.txt` (for example, `.venv-ui/bin/python -m pip install -r tests/requirements.txt`). Document the environment and exact command in `tests/README.md`. If installation fails or is blocked, report the reason and do not mark initialization complete.
@@ -120,17 +112,18 @@ When running an agent test case, handle required sign-in before continuing with 
 
 ### Execution
 
-1. Choose one filesystem-safe timestamp for the run before executing tests. Reserve `reports/ui-test-report-<timestamp>.md` and create `outputs/ui-test-<timestamp>/` using exactly the same timestamp. If either path exists, choose a new timestamp for both; never overwrite an earlier run. Find every regular test case file recursively according to `Test case naming convention` under `agent-tests/` and sort the project-relative paths. Each file is one test. If there are no test files, write a report with zero totals and explain that no tests were found.
+1. Choose one filesystem-safe timestamp for the run before executing tests. Reserve `reports/ui-test-report-<timestamp>.md` and create `outputs/ui-test-<timestamp>/` using exactly the same timestamp. If either path exists, choose a new timestamp for both; never overwrite an earlier run. Resolve the selected Markdown and Python paths using the discovery rules above. Count each selected file once. For an empty selection, report zero cases and explain why.
 2. Honor the user's case selection. For a run with at least one selected Markdown case, locate and read the optional root-level `agent-tests/before-all.md` and `agent-tests/after-all.md` before starting. Execute `before-all.md` once, before any selected Markdown case runs. If setup fails or is blocked, record the reason and mark all selected Markdown cases skipped. Then proceed to suite teardown.
 3. Read each selected case in full. Identify its setup, actions, expected results, and any explicit skip condition. An empty file or one without actionable steps is a failure with its content problem recorded as the actual result.
 4. Use the host's available browser or desktop UI tools to perform the steps in order. For web cases, if no browser tool is available, use Python Playwright directly when the environment permits browser automation. If neither is available, apply the skip rule below. For web cases, record each action, observed locator, input reference, expected result, and actual result as you go, following the reference. Observe the UI after state-changing actions. Do not infer success from an action call alone. Reestablish the required starting state between tests when needed.
 5. Mark a test `passed` only if every stated expectation is observed. Mark it `failed` for an expectation mismatch, unexpected UI state, or execution error. Include expected and actual results for failed tests in the Markdown report. The separate step recording retains observations and expectations for every web case.
 6. Mark it `skipped` when an explicit skip condition applies or a required app, URL, account, fixture, or permission is unavailable; record the reason. Never count an unrun test as passed.
-7. After every selected Markdown case has a pass, fail, or skip result, execute `after-all.md` once if present, including after failed or blocked setup. Run it before closing the Markdown run's browser or starting Python replay. Record action errors and blocked cleanup without adding cleanup verification. Record both hooks' steps under the run's `steps/` directory and report their outcomes separately from case totals.
+7. After every selected Markdown case has a pass, fail, or skip result, execute `after-all.md` once if present, including after failed or blocked setup. Run it before closing the Markdown run's browser or starting Python replay. Record action errors and blocked cleanup following the teardown rules in the Python reference. Record both hooks' steps under the run's `steps/` directory and report their outcomes separately from case totals.
 8. Generate or update each web case's Python test and translate any suite hook files into shared pytest hooks using [Generate suite hooks](references/python-playwright.md#generate-suite-hooks). Retain assertions for application failures; do not change the expected result to make a broken application pass. Save a partial recording and an explicitly skipped Python case when a complete runnable test cannot be produced.
 9. Replay generated tests from a fresh context and reset fixture state when authorized and repeatable. Track replay results separately from the initial UI observations. If replay is blocked or unsafe to repeat within the requested scope, label the script unverified and explain why in the separate recording. Do not claim a script is reusable based only on syntax or collection checks.
-10. If a test is failed, raise a bug ticket as introduced in `Create a bug ticket`. Do not create a duplicate ticket for the same failure during replay.
-11. Close browser contexts or sessions created for the test run when all tests are completed.
+10. Run explicitly selected Python modules using pytest and collect per-module outcomes from pytest results, including collection and fixture errors. A module fails if any item fails or has an error, passes if at least one item passes and none fail or error, and is skipped if all items skip or execution is blocked by a missing prerequisite. Treat an unexplained empty collection as a failure. Report each selected module once, even if it is also replayed for a Markdown case.
+11. If a test is failed, raise a bug ticket as introduced in `Create a bug ticket`. Do not create a duplicate ticket for the same failure during replay.
+12. Close browser contexts or sessions created for the test run when all tests are completed.
 
 Do not edit the source Markdown test definitions while running them. UI actions must stay within the user's requested test scope and existing authorization.
 
@@ -145,26 +138,27 @@ Create this folder even for zero-test runs so the summary link always has a vali
 - Create `reports/ui-test-report-<timestamp>.md` using the timestamp already chosen for the run and the defined `Report Format`.
 - Add an `Outputs` row in the summary table linking to `[ui-test-<timestamp>](../outputs/ui-test-<timestamp>/)`.
 - Avoid overwriting an existing report. 
-- Include the run time, total discovered tests, totals for passed, failed, and skipped
-- Include one detail entry per test with its project-relative file path and final status. The detail entry should follow the template blow,
+- Include the run time, total selected cases, totals for passed, failed, and skipped
+- Include one detail entry per test with its project-relative file path and final status. The detail entry should follow the format below.
 - For every failure, include `Expect` and `Actual`
 - For every skip, include `Reason`. Keep observations specific enough to reproduce or investigate the result.
 - When a Python script exists for a case, append `regression test case: [<script filename>](<script test file path>)` to its `Details` cell, including for passed cases. Use a link resolved relative to the report file. Preserve any failure or skip details, separating the regression link with `<br>` when needed. Omit this addition when no script exists; never link a nonexistent file.
 - Do not include Python test generation results, replay results, automation status, limitations, step recordings, or regression setup/run instructions in the test report. Retain those details in the separate recordings and suite README.
 - Reserve `Outputs` for artifacts produced by the tested application or test case, such as a downloaded file. Use report-relative links into the run output folder for these artifacts. Put the regression script link only in `Details`.
 
-After writing, reread the report. Confirm each discovered test appears exactly once and that `passed + failed + skipped = total`, and that the summary folder link exists and shares the report timestamp. Tell the user the report path, totals, generated suite path, and exact regression command. Keep any user-facing explanation of replay differences outside the test report.
+After writing, reread the report. Confirm each selected file appears exactly once and that `passed + failed + skipped = total`, and that the summary folder link exists and shares the report timestamp. Tell the user the report path, totals, generated suite path, and exact regression command. Keep any user-facing explanation of replay differences outside the test report.
 
 ### Report Format
 
 The report format is:
 
 ## Summary
-| Total | <total number of tests>> |
+| Total | <total number of selected cases> |
 |---|---|
-| 🟢 **Pass** | <total number of passed tests> |
+| 🟢 **Passed** | <total number of passed tests> |
 | 🔴 **Failed** | <total number of failed tests> |
 | 🟡 **Skipped** | <total number of skipped tests> |
+| Run time | <run time> |
 | Outputs | [ui-test-<timestamp>](../outputs/ui-test-<timestamp>/) |
 
 ## Results
@@ -172,8 +166,16 @@ The report format is:
 ### <parent folder name>
 | Test Case | Status | Details | Outputs | 
 |---|---|---|---|
-| <test file 1 name> | <status indicator, e.g. 🟢> | <failure or skip details when applicable; regression test case: [script filename](script test file path) when a script exists> | if applicable, the link of generated artefacts by the test, e.g. generated file |
-| <test file 2 name> | <status indicator, e.g. 🔴> | <failure or skip details when applicable; regression test case: [script filename](script test file path) when a script exists> | if applicable, the link of generated artefacts by the test, e.g. generated file |
+| <project-relative case path> | <status indicator, e.g. 🟢> | <failure or skip details when applicable; regression test case: [script filename](script test file path) when a script exists> | if applicable, the link of generated artefacts by the test, e.g. generated file |
+| <project-relative case path> | <status indicator, e.g. 🔴> | <failure or skip details when applicable; regression test case: [script filename](script test file path) when a script exists> | if applicable, the link of generated artefacts by the test, e.g. generated file |
+
+## Suite hooks
+
+Include this table when at least one Markdown suite hook is present. Keep its outcomes outside the case totals.
+
+| Hook | Status | Details |
+|---|---|---|
+| <project-relative hook path> | <passed, failed, or blocked> | <action error or blocker, if applicable> |
 
 ## Create a bug ticket
 
