@@ -22,7 +22,7 @@ def test_case_name(browser, base_url):
     # test scripts
 ```
 
-Use a descriptive `test_` name while retaining the `browser, base_url` parameters. Create a new browser context for every test with `browser.new_context()` and close it in `finally`. Never load saved browser/storage state or reuse a persistent profile; perform required login in the new context.
+Use a descriptive `test_` name while retaining the `browser, base_url` parameters. Write test bodies in domain language using the page objects, components, and flows in `tests/support/`, reusing and extending existing ones rather than duplicating locators or steps; see [Design the suite for maintainability](references/python-playwright.md#design-the-suite-for-maintainability). Create a new browser context for every test with `browser.new_context()` and close it in `finally`. Never load saved browser/storage state or reuse a persistent profile; perform required login in the new context.
 
 For locator visibility steps outside final expectation verification, use `is_visible` or `is_hidden` with a five-second timeout budget. Do not validate these intermediate checks with `expect`, `assert`, or equivalent failure checks. Use the Boolean result to control the recorded action. Because Playwright ignores these methods' `timeout` argument, implement the budget with bounded polling as described in the Python reference. Keep assertions for final expected outcomes and keep cleanup unverified.
 
